@@ -18,10 +18,6 @@
   "contributes": {
     "commands": [
       {
-        "command": "ai-auto-responder.helloWorld",
-        "title": "Hello World"
-      },
-      {
         "command": "ai-auto-responder.cancelRequest",
         "title": "AI Auto Responder: Cancel Active Request"
       }

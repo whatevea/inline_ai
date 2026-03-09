@@ -168,59 +168,42 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 async function getPromptRequest(document: vscode.TextDocument, cursorPosition: vscode.Position): Promise<PromptRequest | undefined> {
-	// Support multiline queries: accumulate lines from trigger line going backwards
-	// until we find a line that doesn't end with ..
-	const lines: string[] = [];
-	let triggerLineIndex = cursorPosition.line - 1;
-
-	// Collect lines going backwards from the current line
-	while (triggerLineIndex >= 0) {
-		const line = document.lineAt(triggerLineIndex);
-		const trimmedLine = normalizeTriggerText(line.text);
-
-		if (lines.length === 0) {
-			// First line must contain @ai trigger
-			if (!trimmedLine.includes('@ai')) {
-				return undefined;
-			}
-			lines.push(trimmedLine);
-		} else {
-			// Additional lines - check if this is a continuation (ends with \)
-			const lineText = line.text.trim();
-			lines.unshift(trimmedLine);
-
-			// Stop if line doesn't end with continuation marker
-			if (!lineText.endsWith('\\')) {
-				break;
-			}
-		}
-
-		// If the last collected line ends with ".." (end marker), stop
-		const currentLineText = lines[lines.length - 1];
-		if (currentLineText.endsWith('..')) {
-			break;
-		}
-
-		triggerLineIndex--;
-	}
-
-	// If we only have one line and it's the trigger line, check if it ends with ..
-	// Otherwise, we need more lines
-	if (lines.length === 1 && !lines[0].endsWith('..')) {
-		// Check if there's a line above that continues
-		if (cursorPosition.line > 1) {
-			const prevLine = document.lineAt(cursorPosition.line - 2);
-			if (!prevLine.text.trim().endsWith('\\')) {
-				return undefined;
-			}
-		}
+	const queryEndLine = cursorPosition.line - 1;
+	if (queryEndLine < 0) {
 		return undefined;
 	}
 
-	// Join all lines and try to parse
+	// Trigger only once the final line ends with "..".
+	const normalizedEndLine = normalizeTriggerText(document.lineAt(queryEndLine).text);
+	if (!normalizedEndLine.endsWith('..')) {
+		return undefined;
+	}
+
+	// Scan upward to find the trigger start. This supports plain multiline prompts.
+	const MAX_QUERY_LINES = 80;
+	const scanStart = Math.max(0, queryEndLine - (MAX_QUERY_LINES - 1));
+	let queryStartLine = -1;
+	for (let lineIndex = queryEndLine; lineIndex >= scanStart; lineIndex--) {
+		const normalizedLine = normalizeTriggerText(document.lineAt(lineIndex).text);
+		if (/^@ai(?:\.wholefile|\.files)?\b/.test(normalizedLine)) {
+			queryStartLine = lineIndex;
+			break;
+		}
+	}
+
+	if (queryStartLine === -1) {
+		return undefined;
+	}
+
+	const lines: string[] = [];
+	for (let lineIndex = queryStartLine; lineIndex <= queryEndLine; lineIndex++) {
+		lines.push(normalizeTriggerText(document.lineAt(lineIndex).text));
+	}
+
 	const combinedText = lines.join('\n');
-	const range = document.lineAt(triggerLineIndex + 1).range.union(
-		document.lineAt(cursorPosition.line - 1).rangeIncludingLineBreak
+	const range = new vscode.Range(
+		document.lineAt(queryStartLine).range.start,
+		document.lineAt(queryEndLine).rangeIncludingLineBreak.end
 	);
 
 	// Try different parsers in order
@@ -234,10 +217,12 @@ function normalizeTriggerText(rawLine: string): string {
 	const commentPrefixes = [
 		'//',
 		'#',
+		';',
 		'/*',
 		'*',
 		'<!--',
-		'--'
+		'--',
+		'>'
 	];
 
 	for (const prefix of commentPrefixes) {
@@ -247,6 +232,15 @@ function normalizeTriggerText(rawLine: string): string {
 	}
 
 	return trimmed;
+}
+
+function sanitizeModelText(rawText: string): string {
+	let cleaned = rawText.trim();
+	const fencedBlockMatch = cleaned.match(/^```(?:[A-Za-z0-9_+-]+)?\s*\n([\s\S]*?)\n```$/);
+	if (fencedBlockMatch) {
+		cleaned = fencedBlockMatch[1].trim();
+	}
+	return cleaned;
 }
 
 async function enrichPromptRequest(
@@ -329,7 +323,7 @@ async function queryAIModel(
 		throw new Error('No text returned from OpenRouter model.');
 	}
 
-	return `\n${aiText}\n`;
+	return sanitizeModelText(aiText);
 }
 
 export function deactivate() { }
