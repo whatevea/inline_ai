@@ -7,8 +7,35 @@ import { OpenRouterConfig, PromptRequest } from './types';
 let isProcessing = false;
 let activeAbortController: AbortController | undefined;
 
+// Response cache: key is hash of (prompt + fileContext + wholeFile + filesMode), value is response
+const responseCache = new Map<string, string>();
+const CACHE_MAX_SIZE = 100;
+
+function getCacheKey(prompt: string, wholeFile: boolean, filesMode: boolean, fileContext?: string, filesContext?: string): string {
+	return JSON.stringify({ prompt, wholeFile, filesMode, fileContext, filesContext });
+}
+
+function getCachedResponse(key: string): string | undefined {
+	return responseCache.get(key);
+}
+
+function setCachedResponse(key: string, response: string): void {
+	// Simple cache eviction: clear oldest entries if cache is full
+	if (responseCache.size >= CACHE_MAX_SIZE) {
+		const firstKey = responseCache.keys().next().value;
+		if (firstKey) {
+			responseCache.delete(firstKey);
+		}
+	}
+	responseCache.set(key, response);
+}
+
+// Store document version when starting a request
+let activeDocumentUri: vscode.Uri | undefined;
+let activeDocumentVersion: number | undefined;
+
 export function activate(context: vscode.ExtensionContext) {
-	console.log('AI Auto-Responder is now active!');
+	console.log('Inline AI is now active!');
 
 	const cancelRequestCommand = vscode.commands.registerCommand('ai-auto-responder.cancelRequest', () => {
 		activeAbortController?.abort();
@@ -29,6 +56,10 @@ export function activate(context: vscode.ExtensionContext) {
 			return;
 		}
 
+		// Store document info at the start of the request
+		const documentVersionAtStart = event.document.version;
+		const documentUriAtStart = event.document.uri.toString();
+
 		const request = await getPromptRequest(event.document, editor.selection.active);
 		if (!request) {
 			return;
@@ -37,6 +68,8 @@ export function activate(context: vscode.ExtensionContext) {
 		isProcessing = true;
 		const abortController = new AbortController();
 		activeAbortController = abortController;
+		activeDocumentUri = event.document.uri;
+		activeDocumentVersion = documentVersionAtStart;
 		await vscode.commands.executeCommand('setContext', 'aiAutoResponder.requestInProgress', true);
 		let statusBarMessage: vscode.Disposable | undefined;
 		const setStep = (message: string): void => {
@@ -47,6 +80,32 @@ export function activate(context: vscode.ExtensionContext) {
 		try {
 			setStep('$(sync~spin) Preparing request...');
 			const requestWithContext = await enrichPromptRequest(request, setStep);
+
+			// Check cache first
+			const cacheKey = getCacheKey(
+				requestWithContext.prompt,
+				requestWithContext.wholeFile,
+				requestWithContext.filesMode,
+				requestWithContext.fileContext,
+				requestWithContext.filesContext
+			);
+			const cachedResponse = getCachedResponse(cacheKey);
+			if (cachedResponse) {
+				setStep('$(check) Using cached response...');
+				// Still verify document hasn't changed before editing
+				const currentEditor = vscode.window.activeTextEditor;
+				if (!currentEditor || currentEditor.document.uri.toString() !== documentUriAtStart) {
+					throw new Error('Document changed during request. Aborting edit.');
+				}
+				if (currentEditor.document.version !== documentVersionAtStart) {
+					throw new Error('Document version changed during request. Aborting edit.');
+				}
+				await currentEditor.edit((editBuilder) => {
+					editBuilder.replace(request.range, cachedResponse);
+				});
+				return;
+			}
+
 			setStep('$(sync~spin) Sending request to AI...');
 			const response = await queryAIModel(
 				requestWithContext.prompt,
@@ -57,12 +116,27 @@ export function activate(context: vscode.ExtensionContext) {
 				abortController.signal
 			);
 
-			await editor.edit((editBuilder) => {
+			// Cache the response
+			setCachedResponse(cacheKey, response);
+
+			// Error boundary: Check document hasn't changed before editing
+			const currentEditor = vscode.window.activeTextEditor;
+			if (!currentEditor || currentEditor.document.uri.toString() !== documentUriAtStart) {
+				throw new Error('Document changed during request. Aborting edit.');
+			}
+			if (currentEditor.document.version !== documentVersionAtStart) {
+				throw new Error('Document version changed during request. Aborting edit.');
+			}
+
+			await currentEditor.edit((editBuilder) => {
 				editBuilder.replace(request.range, response);
 			});
 		} catch (error) {
 			if (abortController.signal.aborted) {
 				vscode.window.showInformationMessage('AI request cancelled.');
+			} else if (error instanceof Error && error.message.includes('Document')) {
+				// Don't show error for document change - it's expected behavior
+				console.log('Inline AI:', error.message);
 			} else {
 				vscode.window.showErrorMessage('AI Error: ' + error);
 			}
@@ -71,6 +145,8 @@ export function activate(context: vscode.ExtensionContext) {
 			if (activeAbortController === abortController) {
 				activeAbortController = undefined;
 			}
+			activeDocumentUri = undefined;
+			activeDocumentVersion = undefined;
 			await vscode.commands.executeCommand('setContext', 'aiAutoResponder.requestInProgress', false);
 			statusBarMessage?.dispose();
 		}
@@ -92,18 +168,65 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 async function getPromptRequest(document: vscode.TextDocument, cursorPosition: vscode.Position): Promise<PromptRequest | undefined> {
-	if (cursorPosition.line === 0) {
+	// Support multiline queries: accumulate lines from trigger line going backwards
+	// until we find a line that doesn't end with ..
+	const lines: string[] = [];
+	let triggerLineIndex = cursorPosition.line - 1;
+
+	// Collect lines going backwards from the current line
+	while (triggerLineIndex >= 0) {
+		const line = document.lineAt(triggerLineIndex);
+		const trimmedLine = normalizeTriggerText(line.text);
+
+		if (lines.length === 0) {
+			// First line must contain @ai trigger
+			if (!trimmedLine.includes('@ai')) {
+				return undefined;
+			}
+			lines.push(trimmedLine);
+		} else {
+			// Additional lines - check if this is a continuation (ends with \)
+			const lineText = line.text.trim();
+			lines.unshift(trimmedLine);
+
+			// Stop if line doesn't end with continuation marker
+			if (!lineText.endsWith('\\')) {
+				break;
+			}
+		}
+
+		// If the last collected line ends with ".." (end marker), stop
+		const currentLineText = lines[lines.length - 1];
+		if (currentLineText.endsWith('..')) {
+			break;
+		}
+
+		triggerLineIndex--;
+	}
+
+	// If we only have one line and it's the trigger line, check if it ends with ..
+	// Otherwise, we need more lines
+	if (lines.length === 1 && !lines[0].endsWith('..')) {
+		// Check if there's a line above that continues
+		if (cursorPosition.line > 1) {
+			const prevLine = document.lineAt(cursorPosition.line - 2);
+			if (!prevLine.text.trim().endsWith('\\')) {
+				return undefined;
+			}
+		}
 		return undefined;
 	}
 
-	const triggerLineIndex = cursorPosition.line - 1;
-	const triggerLine = document.lineAt(triggerLineIndex);
-	const triggerText = normalizeTriggerText(triggerLine.text);
-	const range = triggerLine.rangeIncludingLineBreak;
+	// Join all lines and try to parse
+	const combinedText = lines.join('\n');
+	const range = document.lineAt(triggerLineIndex + 1).range.union(
+		document.lineAt(cursorPosition.line - 1).rangeIncludingLineBreak
+	);
 
-	return parseWholeFileAiQuery(triggerText, range, document)
-		?? parseFilesAiQuery(triggerText, range)
-		?? parseNormalAiQuery(triggerText, range);
+	// Try different parsers in order
+	return parseWholeFileAiQuery(combinedText, range, document)
+		?? parseFilesAiQuery(combinedText, range)
+		?? parseNormalAiQuery(combinedText, range);
 }
 
 function normalizeTriggerText(rawLine: string): string {

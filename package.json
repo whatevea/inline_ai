@@ -1,15 +1,16 @@
 {
-  "name": "ai-auto-responder",
-  "displayName": "ai-auto-responder",
+  "name": "inline-ai",
+  "displayName": "Inline AI",
   "publisher": "sandip-bamrel",
-  "description": "Replaces @ai prompts with AI answers.",
-  "version": "0.0.2",
+  "description": "AI-powered inline code completion and assistance.",
+  "version": "0.0.3",
   "engines": {
     "vscode": "^1.109.0"
   },
   "categories": [
     "Other"
   ],
+  "icon": "croppedicon.png",
   "activationEvents": [
     "onStartupFinished"
   ],
