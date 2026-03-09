@@ -1,0 +1,94 @@
+{
+  "name": "ai-auto-responder",
+  "displayName": "ai-auto-responder",
+  "publisher": "sandip-bamrel",
+  "description": "Replaces @ai prompts with AI answers.",
+  "version": "0.0.2",
+  "engines": {
+    "vscode": "^1.109.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "ai-auto-responder.helloWorld",
+        "title": "Hello World"
+      },
+      {
+        "command": "ai-auto-responder.cancelRequest",
+        "title": "AI Auto Responder: Cancel Active Request"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "ai-auto-responder.cancelRequest",
+        "key": "escape",
+        "when": "aiAutoResponder.requestInProgress"
+      }
+    ],
+    "configuration": {
+      "title": "AI Auto Responder",
+      "properties": {
+        "aiAutoResponder.openRouterApiKey": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "OpenRouter API key used for requests. Store this in user settings."
+        },
+        "aiAutoResponder.openRouterModel": {
+          "type": "string",
+          "default": "minimax/minimax-m2.5",
+          "description": "Model ID sent to OpenRouter."
+        },
+        "aiAutoResponder.rolePrompt": {
+          "type": "string",
+          "default": "You are AI which gives short answer",
+          "description": "Role/system-style prompt prepended to the user @ai prompt."
+        },
+        "aiAutoResponder.enableReasoning": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to request reasoning from compatible OpenRouter models."
+        },
+        "aiAutoResponder.providerSort": {
+          "type": "string",
+          "default": "price",
+          "description": "OpenRouter provider sorting strategy (for example: price, throughput, latency)."
+        },
+        "aiAutoResponder.wholeFileRolePrompt": {
+          "type": "string",
+          "default": "You are an expert coding assistant. Use the provided full file context and return the best code completion or edit response for the query.",
+          "description": "Role/system-style prompt used for @ai.wholefile <query> .. requests."
+        },
+        "aiAutoResponder.filesRolePrompt": {
+          "type": "string",
+          "default": "You are a coding assistant. Use the provided retrieved file contents as context and answer precisely.",
+          "description": "Role/system-style prompt used for @ai.files <query> .. requests that retrieve file context from the workspace."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.109.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "22.x",
+    "typescript-eslint": "^8.56.1",
+    "eslint": "^9.39.3",
+    "typescript": "^5.9.3",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^2.5.2"
+  }
+}
