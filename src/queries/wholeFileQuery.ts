@@ -6,7 +6,7 @@ export function parseWholeFileAiQuery(
 	range: vscode.Range,
 	document: vscode.TextDocument
 ): PromptRequest | undefined {
-	const wholeFileMatch = triggerText.match(/^@ai\.wholefile\s+([\s\S]*?)\s*\.\.$/);
+	const wholeFileMatch = triggerText.match(/^@ai\.file\s+([\s\S]*?)\s*\.\.$/);
 	if (!wholeFileMatch) {
 		return undefined;
 	}

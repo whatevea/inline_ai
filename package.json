@@ -18,11 +18,21 @@
   "contributes": {
     "commands": [
       {
+        "command": "ai-auto-responder.runInlineQueries",
+        "title": "AI Auto Responder: Run Inline AI Queries"
+      },
+      {
         "command": "ai-auto-responder.cancelRequest",
         "title": "AI Auto Responder: Cancel Active Request"
       }
     ],
     "keybindings": [
+      {
+        "command": "ai-auto-responder.runInlineQueries",
+        "key": "ctrl+enter",
+        "mac": "cmd+enter",
+        "when": "editorTextFocus && !aiAutoResponder.requestInProgress"
+      },
       {
         "command": "ai-auto-responder.cancelRequest",
         "key": "escape",
@@ -44,7 +54,7 @@
         },
         "aiAutoResponder.rolePrompt": {
           "type": "string",
-          "default": "You are AI which gives short answer",
+          "default": "You are AI coding assistant which gives short answer,no markdown.Pure text and/or pure code",
           "description": "Role/system-style prompt prepended to the user @ai prompt."
         },
         "aiAutoResponder.enableReasoning": {
@@ -59,8 +69,8 @@
         },
         "aiAutoResponder.wholeFileRolePrompt": {
           "type": "string",
-          "default": "You are an expert coding assistant. Use the provided full file context and return the best code completion or edit response for the query.",
-          "description": "Role/system-style prompt used for @ai.wholefile <query> .. requests."
+          "default": "You are an expert coding assistant. Use the provided full file context and return the best code completion or edit response for the query.short answer,no markdown.Pure text and/or pure code",
+          "description": "Role/system-style prompt used for @ai.file <query> .. requests."
         },
         "aiAutoResponder.filesRolePrompt": {
           "type": "string",

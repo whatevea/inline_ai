@@ -164,7 +164,7 @@ export async function provideFilesCompletionItems(
 	position: vscode.Position
 ): Promise<vscode.CompletionItem[] | undefined> {
 	const linePrefix = document.lineAt(position).text.slice(0, position.character);
-	const match = linePrefix.match(/^\s*@ai\.files\s+(?:.*[\s])?@([^\s]*)$/);
+	const match = linePrefix.match(/^\s*(?:(?:\/\/|#|;|\/\*|\*|<!--|--|>)\s*)?@ai\.files\s+(?:.*[\s])?@([^\s]*)$/);
 	if (!match) {
 		return undefined;
 	}
@@ -180,8 +180,18 @@ export async function provideFilesCompletionItems(
 		const relPath = vscode.workspace.asRelativePath(uri, false);
 		const item = new vscode.CompletionItem(relPath, vscode.CompletionItemKind.File);
 		const wordStart = position.character - match[1].length;
+
 		item.range = new vscode.Range(position.line, wordStart, position.line, position.character);
 		item.detail = 'Workspace File (AI Context)';
+
+		// THE MAGIC SAUCE:
+		// '\0' forces VS Code to place your completion items at the absolute top of the autocomplete window.
+		// Built-in JavaScript/TypeScript MDN definitions will be pushed safely to the bottom.
+		item.sortText = '\0' + relPath;
+
+		// Automatically highlights the first matched file so you can just press 'Enter'
+		item.preselect = true;
+
 		items.push(item);
 	}
 

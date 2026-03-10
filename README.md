@@ -6,7 +6,7 @@ VS Code extension that listens for inline `@ai` query lines and replaces them wi
 
 - `@ai <query> ..`
   - Runs a normal query with no extra file context.
-- `@ai.wholefile <query> ..`
+- `@ai.file <query> ..`
   - Sends the current full editor file content plus your query.
 - `@ai.files <query> ..`
   - Resolves file hints from your query, reads matched workspace files, and sends that context.
@@ -18,7 +18,9 @@ Comment-friendly variants are also supported (useful for strict linters in `.js/
 - `/* @ai <query> .. */` (single-line style)
 - `* @ai <query> ..` (block comment body line)
 
-Press Enter on the next line after writing a query line to trigger replacement.
+Press `Ctrl+Enter` (or `Cmd+Enter` on macOS) to run queries.
+The command scans the whole active file for completed `@ai... ..` blocks, processes them in parallel, and replaces each block in place.
+You can remap this in `keybindings.json` by changing `ai-auto-responder.runInlineQueries`.
 
 ## Kill Switch (Esc)
 
@@ -42,7 +44,7 @@ Configure under `aiAutoResponder.*`:
 - `openRouterApiKey`: OpenRouter API key (required)
 - `openRouterModel`: model id (default `minimax/minimax-m2.5`)
 - `rolePrompt`: role prompt for `@ai`
-- `wholeFileRolePrompt`: role prompt for `@ai.wholefile`
+- `wholeFileRolePrompt`: role prompt for `@ai.file`
 - `filesRolePrompt`: role prompt for `@ai.files`
 - `enableReasoning`: send reasoning flag
 - `providerSort`: provider sort strategy (`price`, `latency`, etc.)
@@ -52,7 +54,7 @@ Configure under `aiAutoResponder.*`:
 Query handling is split by mode to keep logic isolated and maintainable:
 
 - `src/queries/normalQuery.ts`: `@ai` parsing
-- `src/queries/wholeFileQuery.ts`: `@ai.wholefile` parsing + file context capture
+- `src/queries/wholeFileQuery.ts`: `@ai.file` parsing + file context capture
 - `src/queries/filesQuery.ts`: `@ai.files` parsing, file discovery/context, file completion suggestions
 - `src/extension.ts`: orchestration, editor event flow, OpenRouter request
 - `src/types.ts`: shared request/config types

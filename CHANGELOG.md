@@ -8,7 +8,7 @@ All notable changes to the "ai-auto-responder" extension will be documented in t
 
 - Refactored query handling into dedicated modules by query type without changing runtime behavior:
   - `@ai` logic moved to `src/queries/normalQuery.ts`
-  - `@ai.wholefile` logic moved to `src/queries/wholeFileQuery.ts`
+  - `@ai.file` logic moved to `src/queries/wholeFileQuery.ts`
   - `@ai.files` logic moved to `src/queries/filesQuery.ts`
 - Kept extension orchestration in `src/extension.ts` and introduced shared interfaces in `src/types.ts`.
 - Preserved existing OpenRouter request flow, file-context enrichment behavior, and `@ai.files` autocomplete behavior.
