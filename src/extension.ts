@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { parseNormalAiQuery } from './queries/normalQuery';
 import { enrichFilesPromptRequest, parseFilesAiQuery, provideFilesCompletionItems } from './queries/filesQuery';
 import { parseWholeFileAiQuery } from './queries/wholeFileQuery';
-import { OpenRouterConfig, PromptRequest } from './types';
+import { AiProviderConfig, PromptRequest } from './types';
 
 let isProcessing = false;
 let activeAbortController: AbortController | undefined;
@@ -256,18 +256,36 @@ async function enrichPromptRequest(
 	return enrichFilesPromptRequest(request, setStep);
 }
 
-function getOpenRouterConfig(): OpenRouterConfig {
+function getProviderConfig(): AiProviderConfig {
 	const config = vscode.workspace.getConfiguration('aiAutoResponder');
+	const provider = config.get<'openRouter' | 'openAiCompatible'>('provider', 'openRouter');
 
 	return {
-		apiKey: config.get<string>('openRouterApiKey', '').trim(),
-		model: config.get<string>('openRouterModel', 'minimax/minimax-m2.5').trim(),
+		provider,
+		apiKey: provider === 'openAiCompatible'
+			? config.get<string>('openAiApiKey', '').trim()
+			: config.get<string>('openRouterApiKey', '').trim(),
+		model: provider === 'openAiCompatible'
+			? config.get<string>('openAiModel', '').trim()
+			: config.get<string>('openRouterModel', 'minimax/minimax-m2.5').trim(),
+		baseUrl: config.get<string>('openAiBaseUrl', '').trim(),
 		rolePrompt: config.get<string>('rolePrompt', 'You are AI which gives short answer').trim(),
 		wholeFileRolePrompt: config.get<string>('wholeFileRolePrompt', 'You are an expert coding assistant. Use the provided full file context and return the best code completion or edit response for the query.').trim(),
 		filesRolePrompt: config.get<string>('filesRolePrompt', 'You are a coding assistant. Use the provided retrieved file contents as context and answer precisely.').trim(),
 		enableReasoning: config.get<boolean>('enableReasoning', true),
 		providerSort: config.get<string>('providerSort', 'price').trim()
 	};
+}
+
+function buildOpenAiCompatibleUrl(baseUrl: string): string {
+	const trimmed = baseUrl.replace(/\/+$/, '');
+	if (trimmed.endsWith('/chat/completions')) {
+		return trimmed;
+	}
+	if (trimmed.endsWith('/v1')) {
+		return `${trimmed}/chat/completions`;
+	}
+	return `${trimmed}/v1/chat/completions`;
 }
 
 async function queryAIModel(
@@ -278,9 +296,24 @@ async function queryAIModel(
 	filesContext?: string,
 	signal?: AbortSignal
 ): Promise<string> {
-	const config = getOpenRouterConfig();
+	const config = getProviderConfig();
+
 	if (!config.apiKey) {
-		throw new Error('Missing OpenRouter API key. Set aiAutoResponder.openRouterApiKey in settings.');
+		throw new Error(
+			config.provider === 'openAiCompatible'
+				? 'Missing OpenAI compatible API key. Set aiAutoResponder.openAiApiKey in settings.'
+				: 'Missing OpenRouter API key. Set aiAutoResponder.openRouterApiKey in settings.'
+		);
+	}
+	if (!config.model) {
+		throw new Error(
+			config.provider === 'openAiCompatible'
+				? 'Missing OpenAI compatible model. Set aiAutoResponder.openAiModel in settings.'
+				: 'Missing OpenRouter model. Set aiAutoResponder.openRouterModel in settings.'
+		);
+	}
+	if (config.provider === 'openAiCompatible' && !config.baseUrl) {
+		throw new Error('Missing OpenAI compatible base URL. Set aiAutoResponder.openAiBaseUrl in settings.');
 	}
 
 	const finalPrompt = wholeFile
@@ -294,24 +327,33 @@ async function queryAIModel(
 			: config.rolePrompt;
 	const content = selectedRolePrompt ? `${selectedRolePrompt}\n\n${withFilesContext}` : withFilesContext;
 
-	const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+	const endpoint = config.provider === 'openAiCompatible'
+		? buildOpenAiCompatibleUrl(config.baseUrl)
+		: 'https://openrouter.ai/api/v1/chat/completions';
+
+	const requestBody: Record<string, unknown> = {
+		model: config.model,
+		messages: [
+			{
+				role: 'user',
+				content
+			}
+		]
+	};
+
+	if (config.provider === 'openRouter') {
+		requestBody.reasoning = { enabled: config.enableReasoning };
+		requestBody.provider = { sort: config.providerSort };
+	}
+
+	const response = await fetch(endpoint, {
 		method: 'POST',
 		headers: {
 			Authorization: `Bearer ${config.apiKey}`,
 			'Content-Type': 'application/json'
 		},
 		signal,
-		body: JSON.stringify({
-			model: config.model,
-			messages: [
-				{
-					role: 'user',
-					content
-				}
-			],
-			reasoning: { enabled: config.enableReasoning },
-			provider: { sort: config.providerSort }
-		})
+		body: JSON.stringify(requestBody)
 	});
 
 	const data: any = await response.json();
@@ -322,7 +364,11 @@ async function queryAIModel(
 
 	const aiText = data?.choices?.[0]?.message?.content;
 	if (!aiText || typeof aiText !== 'string') {
-		throw new Error('No text returned from OpenRouter model.');
+		throw new Error(
+			config.provider === 'openAiCompatible'
+				? 'No text returned from OpenAI compatible model.'
+				: 'No text returned from OpenRouter model.'
+		);
 	}
 
 	return sanitizeModelText(aiText);

@@ -42,15 +42,43 @@
     "configuration": {
       "title": "AI Auto Responder",
       "properties": {
+        "aiAutoResponder.provider": {
+          "type": "string",
+          "default": "openRouter",
+          "enum": [
+            "openRouter",
+            "openAiCompatible"
+          ],
+          "enumDescriptions": [
+            "Use OpenRouter-specific settings and endpoint.",
+            "Use a custom OpenAI-compatible endpoint with base URL, API key, and model."
+          ],
+          "description": "AI provider used for inline requests."
+        },
         "aiAutoResponder.openRouterApiKey": {
           "type": "string",
           "default": "",
-          "markdownDescription": "OpenRouter API key used for requests. Store this in user settings."
+          "markdownDescription": "OpenRouter API key used when `aiAutoResponder.provider` is `openRouter`."
         },
         "aiAutoResponder.openRouterModel": {
           "type": "string",
           "default": "minimax/minimax-m2.5",
-          "description": "Model ID sent to OpenRouter."
+          "description": "Model ID sent to OpenRouter when provider is `openRouter`."
+        },
+        "aiAutoResponder.openAiBaseUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Base URL for OpenAI-compatible API when provider is `openAiCompatible` (for example: https://api.groq.com/openai/v1)."
+        },
+        "aiAutoResponder.openAiApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "API key for OpenAI-compatible API when provider is `openAiCompatible`."
+        },
+        "aiAutoResponder.openAiModel": {
+          "type": "string",
+          "default": "",
+          "description": "Model ID for OpenAI-compatible API when provider is `openAiCompatible`."
         },
         "aiAutoResponder.rolePrompt": {
           "type": "string",
@@ -60,12 +88,12 @@
         "aiAutoResponder.enableReasoning": {
           "type": "boolean",
           "default": true,
-          "description": "Whether to request reasoning from compatible OpenRouter models."
+          "description": "Whether to request reasoning from compatible OpenRouter models (used only when provider is `openRouter`)."
         },
         "aiAutoResponder.providerSort": {
           "type": "string",
           "default": "price",
-          "description": "OpenRouter provider sorting strategy (for example: price, throughput, latency)."
+          "description": "OpenRouter provider sorting strategy (for example: price, throughput, latency). Used only when provider is `openRouter`."
         },
         "aiAutoResponder.wholeFileRolePrompt": {
           "type": "string",

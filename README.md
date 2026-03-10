@@ -1,6 +1,6 @@
 # AI Auto Responder
 
-VS Code extension that listens for inline `@ai` query lines and replaces them with model output from OpenRouter.
+VS Code extension that listens for inline `@ai` query lines and replaces them with model output from a configurable provider.
 
 ## Query Modes
 
@@ -25,7 +25,7 @@ You can remap this in `keybindings.json` by changing `ai-auto-responder.runInlin
 ## Kill Switch (Esc)
 
 While an AI request is running, press `Esc` to cancel immediately.  
-This aborts the in-flight OpenRouter call and keeps your text unchanged.
+This aborts the in-flight AI call and keeps your text unchanged.
 
 ## File Autocomplete in `@ai.files`
 
@@ -41,13 +41,17 @@ Example:
 
 Configure under `aiAutoResponder.*`:
 
-- `openRouterApiKey`: OpenRouter API key (required)
-- `openRouterModel`: model id (default `minimax/minimax-m2.5`)
+- `provider`: `openRouter` or `openAiCompatible`
+- `openRouterApiKey`: OpenRouter API key (required when provider is `openRouter`)
+- `openRouterModel`: OpenRouter model id (default `minimax/minimax-m2.5`)
+- `openAiBaseUrl`: OpenAI-compatible base URL (required when provider is `openAiCompatible`, for example `https://api.groq.com/openai/v1`)
+- `openAiApiKey`: OpenAI-compatible API key (required when provider is `openAiCompatible`)
+- `openAiModel`: OpenAI-compatible model id (required when provider is `openAiCompatible`)
 - `rolePrompt`: role prompt for `@ai`
 - `wholeFileRolePrompt`: role prompt for `@ai.file`
 - `filesRolePrompt`: role prompt for `@ai.files`
-- `enableReasoning`: send reasoning flag
-- `providerSort`: provider sort strategy (`price`, `latency`, etc.)
+- `enableReasoning`: send reasoning flag (OpenRouter only)
+- `providerSort`: provider sort strategy (`price`, `latency`, etc., OpenRouter only)
 
 ## Refactored Structure
 
@@ -56,7 +60,7 @@ Query handling is split by mode to keep logic isolated and maintainable:
 - `src/queries/normalQuery.ts`: `@ai` parsing
 - `src/queries/wholeFileQuery.ts`: `@ai.file` parsing + file context capture
 - `src/queries/filesQuery.ts`: `@ai.files` parsing, file discovery/context, file completion suggestions
-- `src/extension.ts`: orchestration, editor event flow, OpenRouter request
+- `src/extension.ts`: orchestration, editor event flow, provider request
 - `src/types.ts`: shared request/config types
 
 ## Notes

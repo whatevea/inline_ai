@@ -1,8 +1,12 @@
 import * as vscode from 'vscode';
 
-export interface OpenRouterConfig {
+export type AiProvider = 'openRouter' | 'openAiCompatible';
+
+export interface AiProviderConfig {
+	provider: AiProvider;
 	apiKey: string;
 	model: string;
+	baseUrl: string;
 	rolePrompt: string;
 	wholeFileRolePrompt: string;
 	filesRolePrompt: string;
