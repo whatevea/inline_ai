@@ -3,7 +3,7 @@ import { parseNormalAiQuery } from './queries/normalQuery';
 import { enrichFilesPromptRequest, parseFilesAiQuery, provideFilesCompletionItems } from './queries/filesQuery';
 import { parseWholeFileAiQuery } from './queries/wholeFileQuery';
 import { AiProviderConfig, PromptRequest } from './types';
-
+import { SettingsSidebarProvider } from './sidebarProvider';
 let isProcessing = false;
 let activeAbortController: AbortController | undefined;
 
@@ -32,7 +32,14 @@ function setCachedResponse(key: string, response: string): void {
 }
 
 export function activate(context: vscode.ExtensionContext) {
-	console.log('Inline AI is now active!');
+	// Register Sidebar Provider
+	const sidebarProvider = new SettingsSidebarProvider(context.extensionUri);
+	context.subscriptions.push(
+		vscode.window.registerWebviewViewProvider(
+			SettingsSidebarProvider.viewType,
+			sidebarProvider
+		)
+	);
 
 	const cancelRequestCommand = vscode.commands.registerCommand('ai-auto-responder.cancelRequest', () => {
 		activeAbortController?.abort();
@@ -319,6 +326,8 @@ async function queryAIModel(
 	const finalPrompt = wholeFile
 		? `Full file context:\n\n${fileContext ?? ''}\n\nUser request:\n${prompt}`
 		: prompt;
+
+	console.log("final Prompt", finalPrompt)
 	const withFilesContext = filesContext ? `${filesContext}\n\nUser request:\n${finalPrompt}` : finalPrompt;
 	const selectedRolePrompt = wholeFile
 		? config.wholeFileRolePrompt
@@ -326,7 +335,7 @@ async function queryAIModel(
 			? config.filesRolePrompt
 			: config.rolePrompt;
 	const content = selectedRolePrompt ? `${selectedRolePrompt}\n\n${withFilesContext}` : withFilesContext;
-
+	console.log("content is", content)
 	const endpoint = config.provider === 'openAiCompatible'
 		? buildOpenAiCompatibleUrl(config.baseUrl)
 		: 'https://openrouter.ai/api/v1/chat/completions';

@@ -16,6 +16,24 @@
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "inline-ai-sidebar",
+          "title": "Inline AI",
+          "icon": "croppedicon.png"
+        }
+      ]
+    },
+    "views": {
+      "inline-ai-sidebar": [
+        {
+          "type": "webview",
+          "id": "inline-ai.settingsView",
+          "name": "Configuration"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "ai-auto-responder.runInlineQueries",

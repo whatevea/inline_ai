@@ -22,7 +22,7 @@ export async function enrichFilesPromptRequest(
 	setStep('$(sync~spin) Searching for file...');
 	const discoveredFiles = await discoverFilesFromPrompt(request.prompt);
 	if (discoveredFiles.length === 0) {
-		throw new Error('No matching files found for @ai.files query.');
+		throw new Error('No referenced files found. Use explicit paths like @src/index.js in @ai.files query.');
 	}
 
 	setStep(`$(check) Found file(s): ${discoveredFiles.length}`);
@@ -36,83 +36,41 @@ export async function enrichFilesPromptRequest(
 }
 
 export async function discoverFilesFromPrompt(prompt: string): Promise<string[]> {
-	const fileUris = await vscode.workspace.findFiles(
-		'**/*',
-		'**/{node_modules,.git,out,dist,build,.vscode-test}/**',
-		2000
-	);
-	const allPaths = fileUris
-		.map((uri) => vscode.workspace.asRelativePath(uri, false))
-		.filter((p) => p && !p.split('/').some((part) => part.startsWith('.')));
-
-	const hints = new Set<string>();
-
-	const explicitTaggedPaths = prompt.match(/(?:^|\s)@([A-Za-z0-9_./-]+)/g) ?? [];
-	for (const match of explicitTaggedPaths) {
-		const normalized = match.trim().substring(1).replace(/^[./]+/, '');
-		if (normalized) {
-			hints.add(normalized);
-		}
+	if (!vscode.workspace.workspaceFolders?.length) {
+		return [];
 	}
 
-	const explicitPaths = prompt.match(/(?:^|\s)([A-Za-z0-9_./-]+\.[A-Za-z0-9_-]+)(?=\s|$)/g) ?? [];
-	for (const match of explicitPaths) {
-		if (match.trim().startsWith('@')) {
-			continue;
-		}
-
-		const normalized = match.trim().replace(/^[./]+/, '');
-		if (normalized) {
-			hints.add(normalized);
-		}
-	}
-
-	const fileNameHints = [...prompt.matchAll(/([A-Za-z0-9_.-]+)\s+file\b/gi)]
-		.map((m) => m[1].trim())
-		.filter(Boolean);
-	for (const hint of fileNameHints) {
-		hints.add(hint);
-	}
-
-	const folderHints = [...prompt.matchAll(/(?:in|on)\s+(?:the\s+)?([A-Za-z0-9_./-]+)\s+folder/gi)]
-		.map((m) => m[1].replace(/^[./]+|\/+$/g, ''))
+	const taggedPaths = [...prompt.matchAll(/(?:^|\s)@([A-Za-z0-9_./-]+)/g)]
+		.map((m) => m[1].trim().replace(/^[./]+/, '').replace(/\/+$/g, ''))
 		.filter(Boolean);
 
-	const resolved = new Set<string>();
-	for (const hint of hints) {
-		const exact = allPaths.find((p) => p === hint || p.endsWith(`/${hint}`));
-		if (exact) {
-			resolved.add(exact);
-			continue;
-		}
-
-		const base = hint.split('/').pop() ?? hint;
-		const byName = allPaths.filter((p) => p.endsWith(`/${base}`) || p === base);
-		for (const candidate of byName) {
-			resolved.add(candidate);
-		}
-
-		const byContains = allPaths.filter((p) => {
-			const leaf = p.split('/').pop() ?? p;
-			return leaf.toLowerCase().includes(base.toLowerCase());
-		});
-		for (const candidate of byContains) {
-			resolved.add(candidate);
-		}
+	if (taggedPaths.length === 0) {
+		return [];
 	}
 
-	if (folderHints.length > 0) {
-		for (const folderHint of folderHints) {
-			const normalizedFolder = folderHint.toLowerCase();
-			for (const candidate of allPaths) {
-				if (candidate.toLowerCase().includes(`/${normalizedFolder}/`) || candidate.toLowerCase().startsWith(`${normalizedFolder}/`)) {
-					resolved.add(candidate);
-				}
+	const unique = [...new Set(taggedPaths)];
+	const existing: string[] = [];
+
+	for (const relPath of unique) {
+		let found = false;
+		for (const folder of vscode.workspace.workspaceFolders) {
+			const candidate = vscode.Uri.joinPath(folder.uri, relPath);
+			try {
+				await vscode.workspace.fs.stat(candidate);
+				existing.push(vscode.workspace.asRelativePath(candidate, false));
+				found = true;
+				break;
+			} catch {
+				// Try next workspace folder.
 			}
 		}
+
+		if (!found) {
+			throw new Error(`Referenced file not found: @${relPath}`);
+		}
 	}
 
-	return [...resolved];
+	return existing;
 }
 
 export async function getFilesContext(filePaths: string[]): Promise<string> {
