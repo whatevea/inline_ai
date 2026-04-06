@@ -1,20 +1,6 @@
 import * as vscode from 'vscode';
 import { PromptRequest } from '../types';
 
-export function parseFilesAiQuery(triggerText: string, range: vscode.Range): PromptRequest | undefined {
-	const filesMatch = triggerText.match(/^@ai\.files\s+([\s\S]*?)\s*\.\.$/);
-	if (!filesMatch) {
-		return undefined;
-	}
-
-	return {
-		prompt: filesMatch[1].trim(),
-		range,
-		wholeFile: false,
-		filesMode: true
-	};
-}
-
 export async function enrichFilesPromptRequest(
 	request: PromptRequest,
 	setStep: (message: string) => void
@@ -22,7 +8,7 @@ export async function enrichFilesPromptRequest(
 	setStep('$(sync~spin) Searching for file...');
 	const discoveredFiles = await discoverFilesFromPrompt(request.prompt);
 	if (discoveredFiles.length === 0) {
-		throw new Error('No referenced files found. Use explicit paths like @src/index.js in @ai.files query.');
+		return request;
 	}
 
 	setStep(`$(check) Found file(s): ${discoveredFiles.length}`);
@@ -122,7 +108,7 @@ export async function provideFilesCompletionItems(
 	position: vscode.Position
 ): Promise<vscode.CompletionItem[] | undefined> {
 	const linePrefix = document.lineAt(position).text.slice(0, position.character);
-	const match = linePrefix.match(/^\s*(?:(?:\/\/|#|;|\/\*|\*|<!--|--|>)\s*)?@ai\.files\s+(?:.*[\s])?@([^\s]*)$/);
+	const match = linePrefix.match(/^\s*(?:(?:\/\/|#|;|\/\*|\*|<!--|--|>)\s*)?@ai\.file\s+(?:.*[\s])?@([^\s]*)$/);
 	if (!match) {
 		return undefined;
 	}

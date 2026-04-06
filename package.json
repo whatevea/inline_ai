@@ -116,12 +116,7 @@
         "aiAutoResponder.wholeFileRolePrompt": {
           "type": "string",
           "default": "You are an expert coding assistant. Use the provided full file context and return the best code completion or edit response for the query.short answer,no markdown.Pure text and/or pure code",
-          "description": "Role/system-style prompt used for @ai.file <query> .. requests."
-        },
-        "aiAutoResponder.filesRolePrompt": {
-          "type": "string",
-          "default": "You are a coding assistant. Use the provided retrieved file contents as context and answer precisely.",
-          "description": "Role/system-style prompt used for @ai.files <query> .. requests that retrieve file context from the workspace."
+          "description": "Role/system-style prompt used for @ai.file <query> .. requests (current file plus optional @path file references)."
         }
       }
     }

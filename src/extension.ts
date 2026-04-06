@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { parseNormalAiQuery } from './queries/normalQuery';
-import { enrichFilesPromptRequest, parseFilesAiQuery, provideFilesCompletionItems } from './queries/filesQuery';
+import { enrichFilesPromptRequest, provideFilesCompletionItems } from './queries/filesQuery';
 import { parseWholeFileAiQuery } from './queries/wholeFileQuery';
 import { AiProviderConfig, PromptRequest } from './types';
 import { SettingsSidebarProvider } from './sidebarProvider';
@@ -111,7 +111,6 @@ async function runInlineQueriesInActiveEditor(): Promise<void> {
 				const response = await queryAIModel(
 					requestWithContext.prompt,
 					requestWithContext.wholeFile,
-					requestWithContext.filesMode,
 					requestWithContext.fileContext,
 					requestWithContext.filesContext,
 					abortController.signal
@@ -180,7 +179,7 @@ function collectPromptRequests(document: vscode.TextDocument): PromptRequest[] {
 	const requests: PromptRequest[] = [];
 	for (let lineIndex = 0; lineIndex < document.lineCount; lineIndex++) {
 		const normalizedLine = normalizeTriggerText(document.lineAt(lineIndex).text);
-		if (!/^@ai(?:\.wholefile|\.files)?\b/.test(normalizedLine)) {
+		if (!/^@ai(?:\.file)?\b/.test(normalizedLine)) {
 			continue;
 		}
 
@@ -210,7 +209,6 @@ function collectPromptRequests(document: vscode.TextDocument): PromptRequest[] {
 		);
 
 		const request = parseWholeFileAiQuery(combinedText, range, document)
-			?? parseFilesAiQuery(combinedText, range)
 			?? parseNormalAiQuery(combinedText, range);
 		if (request) {
 			requests.push(request);
@@ -278,7 +276,6 @@ function getProviderConfig(): AiProviderConfig {
 		baseUrl: config.get<string>('openAiBaseUrl', '').trim(),
 		rolePrompt: config.get<string>('rolePrompt', 'You are AI which gives short answer').trim(),
 		wholeFileRolePrompt: config.get<string>('wholeFileRolePrompt', 'You are an expert coding assistant. Use the provided full file context and return the best code completion or edit response for the query.').trim(),
-		filesRolePrompt: config.get<string>('filesRolePrompt', 'You are a coding assistant. Use the provided retrieved file contents as context and answer precisely.').trim(),
 		enableReasoning: config.get<boolean>('enableReasoning', true),
 		providerSort: config.get<string>('providerSort', 'price').trim()
 	};
@@ -298,7 +295,6 @@ function buildOpenAiCompatibleUrl(baseUrl: string): string {
 async function queryAIModel(
 	prompt: string,
 	wholeFile: boolean,
-	filesMode: boolean,
 	fileContext?: string,
 	filesContext?: string,
 	signal?: AbortSignal
@@ -327,15 +323,11 @@ async function queryAIModel(
 		? `Full file context:\n\n${fileContext ?? ''}\n\nUser request:\n${prompt}`
 		: prompt;
 
-	console.log("final Prompt", finalPrompt)
 	const withFilesContext = filesContext ? `${filesContext}\n\nUser request:\n${finalPrompt}` : finalPrompt;
 	const selectedRolePrompt = wholeFile
 		? config.wholeFileRolePrompt
-		: filesMode
-			? config.filesRolePrompt
-			: config.rolePrompt;
+		: config.rolePrompt;
 	const content = selectedRolePrompt ? `${selectedRolePrompt}\n\n${withFilesContext}` : withFilesContext;
-	console.log("content is", content)
 	const endpoint = config.provider === 'openAiCompatible'
 		? buildOpenAiCompatibleUrl(config.baseUrl)
 		: 'https://openrouter.ai/api/v1/chat/completions';

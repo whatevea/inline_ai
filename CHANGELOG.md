@@ -8,10 +8,9 @@ All notable changes to the "ai-auto-responder" extension will be documented in t
 
 - Refactored query handling into dedicated modules by query type without changing runtime behavior:
   - `@ai` logic moved to `src/queries/normalQuery.ts`
-  - `@ai.file` logic moved to `src/queries/wholeFileQuery.ts`
-  - `@ai.files` logic moved to `src/queries/filesQuery.ts`
+  - `@ai.file` logic moved to `src/queries/wholeFileQuery.ts` and now supports optional `@path` file references.
 - Kept extension orchestration in `src/extension.ts` and introduced shared interfaces in `src/types.ts`.
-- Preserved existing OpenRouter request flow, file-context enrichment behavior, and `@ai.files` autocomplete behavior.
+- Preserved existing OpenRouter request flow, file-context enrichment behavior, and `@ai.file` autocomplete behavior.
 - Added an in-flight request kill switch: pressing `Esc` now cancels active AI calls immediately via abort signal.
 - Added comment-aware trigger parsing so queries also work in linted code files (for example `// @ai ... ..` in `.js/.jsx/.ts/.tsx`).
 

@@ -10,19 +10,12 @@ export function parseWholeFileAiQuery(
 	if (!wholeFileMatch) {
 		return undefined;
 	}
-	console.log({
-		prompt: wholeFileMatch[1].trim(),
-		range,
-		wholeFile: true,
-		filesMode: false,
-		fileContext: document.getText()
-	})
 
 	return {
 		prompt: wholeFileMatch[1].trim(),
 		range,
 		wholeFile: true,
-		filesMode: false,
+		filesMode: true,
 		fileContext: document.getText()
 	};
 }
