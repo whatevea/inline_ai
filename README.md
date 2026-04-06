@@ -21,6 +21,17 @@ Press `Ctrl+Enter` (or `Cmd+Enter` on macOS) to run queries.
 The command scans the whole active file for completed `@ai... ..` blocks, processes them in parallel, and replaces each block in place.
 You can remap this in `keybindings.json` by changing `ai-auto-responder.runInlineQueries`.
 
+## Selection Replace (Ctrl+Shift+I)
+
+Select text (more than 10 letters), then press `Ctrl+Shift+I` (or `Cmd+Shift+I` on macOS).
+
+- Opens a small popup where you type your query.
+- Includes a checkbox to optionally send whole-file context.
+- Press `Esc` to close/cancel the popup.
+- Replaces the selected text with AI output.
+
+You can remap this in `keybindings.json` by changing `ai-auto-responder.replaceSelectionWithAi`.
+
 ## Kill Switch (Esc)
 
 While an AI request is running, press `Esc` to cancel immediately.  
@@ -48,6 +59,7 @@ Configure under `aiAutoResponder.*`:
 - `openAiModel`: OpenAI-compatible model id (required when provider is `openAiCompatible`)
 - `rolePrompt`: role prompt for `@ai`
 - `wholeFileRolePrompt`: role prompt for `@ai.file`
+- `selectionReplacePrompt`: template prompt used for selection replace (`${userPrompt}` and `${selectedText}` supported)
 - `enableReasoning`: send reasoning flag (OpenRouter only)
 - `providerSort`: provider sort strategy (`price`, `latency`, etc., OpenRouter only)
 

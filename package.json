@@ -40,6 +40,14 @@
         "title": "AI Auto Responder: Run Inline AI Queries"
       },
       {
+        "command": "ai-auto-responder.replaceSelectionWithAi",
+        "title": "AI Auto Responder: Replace Selection With AI"
+      },
+      {
+        "command": "ai-auto-responder.toggleSelectionReplaceWholeFileContext",
+        "title": "AI Auto Responder: Toggle Whole File Context (Selection Popup)"
+      },
+      {
         "command": "ai-auto-responder.cancelRequest",
         "title": "AI Auto Responder: Cancel Active Request"
       }
@@ -50,6 +58,17 @@
         "key": "ctrl+enter",
         "mac": "cmd+enter",
         "when": "editorTextFocus && !aiAutoResponder.requestInProgress"
+      },
+      {
+        "command": "ai-auto-responder.replaceSelectionWithAi",
+        "key": "ctrl+shift+i",
+        "mac": "cmd+shift+i",
+        "when": "editorTextFocus && !aiAutoResponder.requestInProgress"
+      },
+      {
+        "command": "ai-auto-responder.toggleSelectionReplaceWholeFileContext",
+        "key": "tab",
+        "when": "inQuickOpen && aiAutoResponder.selectionReplacePopupVisible"
       },
       {
         "command": "ai-auto-responder.cancelRequest",
@@ -117,6 +136,11 @@
           "type": "string",
           "default": "You are an expert coding assistant. Use the provided full file context and return the best code completion or edit response for the query.short answer,no markdown.Pure text and/or pure code",
           "description": "Role/system-style prompt used for @ai.file <query> .. requests (current file plus optional @path file references)."
+        },
+        "aiAutoResponder.selectionReplacePrompt": {
+          "type": "string",
+          "default": "Evaluate the user input and give direct response (no instructions or guide) ${userPrompt} , section to replace ${selectedText}",
+          "description": "Template prompt used by selection-replace AI. Supports ${userPrompt} and ${selectedText} placeholders."
         }
       }
     }

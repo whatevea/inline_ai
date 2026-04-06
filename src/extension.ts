@@ -6,6 +6,7 @@ import { AiProviderConfig, PromptRequest } from './types';
 import { SettingsSidebarProvider } from './sidebarProvider';
 let isProcessing = false;
 let activeAbortController: AbortController | undefined;
+let activeSelectionPopupToggle: (() => void) | undefined;
 
 // Response cache: key is hash of (prompt + fileContext + wholeFile + filesMode), value is response
 const responseCache = new Map<string, string>();
@@ -48,6 +49,12 @@ export function activate(context: vscode.ExtensionContext) {
 	const runInlineQueriesCommand = vscode.commands.registerCommand('ai-auto-responder.runInlineQueries', async () => {
 		await runInlineQueriesInActiveEditor();
 	});
+	const replaceSelectionWithAiCommand = vscode.commands.registerCommand('ai-auto-responder.replaceSelectionWithAi', async () => {
+		await replaceSelectionWithAi();
+	});
+	const toggleSelectionReplaceWholeFileContextCommand = vscode.commands.registerCommand('ai-auto-responder.toggleSelectionReplaceWholeFileContext', () => {
+		activeSelectionPopupToggle?.();
+	});
 
 	const fileCompletionProvider = vscode.languages.registerCompletionItemProvider(
 		[{ scheme: 'file' }, { scheme: 'untitled' }],
@@ -62,6 +69,8 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(fileCompletionProvider);
 	context.subscriptions.push(cancelRequestCommand);
 	context.subscriptions.push(runInlineQueriesCommand);
+	context.subscriptions.push(replaceSelectionWithAiCommand);
+	context.subscriptions.push(toggleSelectionReplaceWholeFileContextCommand);
 }
 
 async function runInlineQueriesInActiveEditor(): Promise<void> {
@@ -162,6 +171,176 @@ async function runInlineQueriesInActiveEditor(): Promise<void> {
 			vscode.window.showInformationMessage('AI request cancelled.');
 		} else if (error instanceof Error && error.message.includes('Document')) {
 			console.log('Inline AI:', error.message);
+		} else {
+			vscode.window.showErrorMessage('AI Error: ' + error);
+		}
+	} finally {
+		isProcessing = false;
+		if (activeAbortController === abortController) {
+			activeAbortController = undefined;
+		}
+		await vscode.commands.executeCommand('setContext', 'aiAutoResponder.requestInProgress', false);
+		statusBarMessage.dispose();
+	}
+}
+
+interface SelectionPopupResult {
+	userPrompt: string;
+	includeWholeFileContext: boolean;
+}
+
+interface SelectionReplaceCheckboxButton extends vscode.QuickInputButton {
+	id: string;
+}
+
+async function showSelectionReplacePopup(): Promise<SelectionPopupResult | undefined> {
+	return new Promise<SelectionPopupResult | undefined>((resolve) => {
+		const quickPick = vscode.window.createQuickPick<vscode.QuickPickItem>();
+		let resolved = false;
+		let includeWholeFileContext = false;
+
+		const updateUi = () => {
+			quickPick.title = 'Modify with AI';
+			quickPick.items = [
+				{
+					label: `${includeWholeFileContext ? '☑' : '☐'} Include whole file context`,
+					detail: 'Click or Press Tab key to toggle',
+					alwaysShow: true
+				}
+			];
+		};
+
+		updateUi();
+		quickPick.placeholder = 'Write your query and press Enter . Escape key to close this';
+		quickPick.ignoreFocusOut = true;
+		activeSelectionPopupToggle = () => {
+			includeWholeFileContext = !includeWholeFileContext;
+			updateUi();
+		};
+		void vscode.commands.executeCommand('setContext', 'aiAutoResponder.selectionReplacePopupVisible', true);
+
+		const acceptAndClose = () => {
+			const userPrompt = quickPick.value.trim();
+			if (!userPrompt) {
+				vscode.window.showWarningMessage('Enter a query for AI replacement.');
+				return;
+			}
+
+			resolved = true;
+			resolve({
+				userPrompt,
+				includeWholeFileContext
+			});
+			quickPick.hide();
+		};
+
+		quickPick.onDidAccept(() => {
+			acceptAndClose();
+		});
+
+		quickPick.onDidChangeSelection((items) => {
+			if (items.length > 0) {
+				includeWholeFileContext = !includeWholeFileContext;
+				updateUi();
+				quickPick.activeItems = [];
+			}
+		});
+
+		quickPick.onDidHide(() => {
+			if (!resolved) {
+				resolve(undefined);
+			}
+			activeSelectionPopupToggle = undefined;
+			void vscode.commands.executeCommand('setContext', 'aiAutoResponder.selectionReplacePopupVisible', false);
+			quickPick.dispose();
+		});
+
+		quickPick.show();
+	});
+}
+
+function applySelectionReplaceTemplate(template: string, userPrompt: string, selectedText: string): string {
+	return template
+		.replace(/\$\{userPrompt\}/g, userPrompt)
+		.replace(/\$\{selectedText\}/g, selectedText);
+}
+
+async function replaceSelectionWithAi(): Promise<void> {
+	if (isProcessing) {
+		vscode.window.showInformationMessage('AI request already in progress.');
+		return;
+	}
+
+	const editor = vscode.window.activeTextEditor;
+	if (!editor) {
+		return;
+	}
+
+	const selection = editor.selection;
+	if (selection.isEmpty) {
+		vscode.window.showInformationMessage('Select text to replace with AI output.');
+		return;
+	}
+
+	const document = editor.document;
+	const selectedRange = new vscode.Range(selection.start, selection.end);
+	const selectedText = document.getText(selectedRange);
+	if (selectedText.replace(/\s/g, '').length <= 10) {
+		vscode.window.showInformationMessage('Selected text must be longer than 10 letters.');
+		return;
+	}
+
+	const popupResult = await showSelectionReplacePopup();
+	if (!popupResult) {
+		return;
+	}
+
+	const documentVersionAtStart = document.version;
+	const documentUriAtStart = document.uri.toString();
+	const config = vscode.workspace.getConfiguration('aiAutoResponder');
+	const promptTemplate = config.get<string>(
+		'selectionReplacePrompt',
+		'Evaluate the user input and give direct response (no instructions or guide) ${userPrompt} , section to replace ${selectedText}'
+	).trim();
+	const prompt = applySelectionReplaceTemplate(promptTemplate, popupResult.userPrompt, selectedText);
+
+	isProcessing = true;
+	const abortController = new AbortController();
+	activeAbortController = abortController;
+	await vscode.commands.executeCommand('setContext', 'aiAutoResponder.requestInProgress', true);
+	const statusBarMessage = vscode.window.setStatusBarMessage('$(sync~spin) Replacing selection with AI...');
+
+	try {
+		const response = await queryAIModel(
+			prompt,
+			popupResult.includeWholeFileContext,
+			popupResult.includeWholeFileContext ? document.getText() : undefined,
+			undefined,
+			abortController.signal,
+			''
+		);
+
+		if (abortController.signal.aborted) {
+			vscode.window.showInformationMessage('AI request cancelled.');
+			return;
+		}
+
+		const currentEditor = vscode.window.activeTextEditor;
+		if (!currentEditor || currentEditor.document.uri.toString() !== documentUriAtStart) {
+			throw new Error('Document changed during request. Aborting edit.');
+		}
+		if (currentEditor.document.version !== documentVersionAtStart) {
+			throw new Error('Document version changed during request. Aborting edit.');
+		}
+
+		await currentEditor.edit((editBuilder) => {
+			editBuilder.replace(selectedRange, response);
+		});
+	} catch (error) {
+		if (abortController.signal.aborted) {
+			vscode.window.showInformationMessage('AI request cancelled.');
+		} else if (error instanceof Error && error.message.includes('Document')) {
+			console.log('Selection Replace AI:', error.message);
 		} else {
 			vscode.window.showErrorMessage('AI Error: ' + error);
 		}
@@ -276,6 +455,7 @@ function getProviderConfig(): AiProviderConfig {
 		baseUrl: config.get<string>('openAiBaseUrl', '').trim(),
 		rolePrompt: config.get<string>('rolePrompt', 'You are AI which gives short answer').trim(),
 		wholeFileRolePrompt: config.get<string>('wholeFileRolePrompt', 'You are an expert coding assistant. Use the provided full file context and return the best code completion or edit response for the query.').trim(),
+		selectionReplacePrompt: config.get<string>('selectionReplacePrompt', 'Evaluate the user input and give direct response (no instructions or guide) ${userPrompt} , section to replace ${selectedText}').trim(),
 		enableReasoning: config.get<boolean>('enableReasoning', true),
 		providerSort: config.get<string>('providerSort', 'price').trim()
 	};
@@ -297,7 +477,8 @@ async function queryAIModel(
 	wholeFile: boolean,
 	fileContext?: string,
 	filesContext?: string,
-	signal?: AbortSignal
+	signal?: AbortSignal,
+	rolePromptOverride?: string
 ): Promise<string> {
 	const config = getProviderConfig();
 
@@ -324,9 +505,9 @@ async function queryAIModel(
 		: prompt;
 
 	const withFilesContext = filesContext ? `${filesContext}\n\nUser request:\n${finalPrompt}` : finalPrompt;
-	const selectedRolePrompt = wholeFile
+	const selectedRolePrompt = rolePromptOverride ?? (wholeFile
 		? config.wholeFileRolePrompt
-		: config.rolePrompt;
+		: config.rolePrompt);
 	const content = selectedRolePrompt ? `${selectedRolePrompt}\n\n${withFilesContext}` : withFilesContext;
 	const endpoint = config.provider === 'openAiCompatible'
 		? buildOpenAiCompatibleUrl(config.baseUrl)

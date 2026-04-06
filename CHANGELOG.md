@@ -13,6 +13,7 @@ All notable changes to the "ai-auto-responder" extension will be documented in t
 - Preserved existing OpenRouter request flow, file-context enrichment behavior, and `@ai.file` autocomplete behavior.
 - Added an in-flight request kill switch: pressing `Esc` now cancels active AI calls immediately via abort signal.
 - Added comment-aware trigger parsing so queries also work in linted code files (for example `// @ai ... ..` in `.js/.jsx/.ts/.tsx`).
+- Added selection-replace AI command (`Ctrl+Shift+I` / `Cmd+Shift+I`) with popup query input, optional whole-file context checkbox, ESC close behavior, and configurable `selectionReplacePrompt` template.
 
 ### Documentation
 

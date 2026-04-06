@@ -9,6 +9,7 @@ export interface AiProviderConfig {
 	baseUrl: string;
 	rolePrompt: string;
 	wholeFileRolePrompt: string;
+	selectionReplacePrompt: string;
 	enableReasoning: boolean;
 	providerSort: string;
 }

@@ -41,6 +41,7 @@ export class SettingsSidebarProvider implements vscode.WebviewViewProvider {
                     await config.update('openAiModel', data.settings.openAiModel, vscode.ConfigurationTarget.Global);
                     await config.update('rolePrompt', data.settings.rolePrompt, vscode.ConfigurationTarget.Global);
                     await config.update('wholeFileRolePrompt', data.settings.wholeFileRolePrompt, vscode.ConfigurationTarget.Global);
+                    await config.update('selectionReplacePrompt', data.settings.selectionReplacePrompt, vscode.ConfigurationTarget.Global);
 
                     vscode.window.showInformationMessage('Inline AI settings saved successfully!');
                 } catch (error) {
@@ -62,7 +63,8 @@ export class SettingsSidebarProvider implements vscode.WebviewViewProvider {
                 openAiApiKey: config.get('openAiApiKey', ''),
                 openAiModel: config.get('openAiModel', ''),
                 rolePrompt: config.get('rolePrompt', ''),
-                wholeFileRolePrompt: config.get('wholeFileRolePrompt', '')
+                wholeFileRolePrompt: config.get('wholeFileRolePrompt', ''),
+                selectionReplacePrompt: config.get('selectionReplacePrompt', '')
             }
         });
     }
@@ -179,6 +181,10 @@ export class SettingsSidebarProvider implements vscode.WebviewViewProvider {
 					<label for="wholeFileRolePrompt">File Prompt (@ai.file)</label>
 					<textarea id="wholeFileRolePrompt"></textarea>
 				</div>
+				<div class="form-group">
+					<label for="selectionReplacePrompt">Selection Replace Prompt (Ctrl+Shift+I)</label>
+					<textarea id="selectionReplacePrompt"></textarea>
+				</div>
 
 				<button id="saveBtn">Save Settings</button>
 
@@ -214,6 +220,7 @@ export class SettingsSidebarProvider implements vscode.WebviewViewProvider {
 							document.getElementById('openAiModel').value = settings.openAiModel;
 							document.getElementById('rolePrompt').value = settings.rolePrompt;
 							document.getElementById('wholeFileRolePrompt').value = settings.wholeFileRolePrompt;
+							document.getElementById('selectionReplacePrompt').value = settings.selectionReplacePrompt;
 
 							// Trigger change event to update UI visibility
 							providerSelect.dispatchEvent(new Event('change'));
@@ -235,7 +242,8 @@ export class SettingsSidebarProvider implements vscode.WebviewViewProvider {
 								openAiApiKey: document.getElementById('openAiApiKey').value,
 								openAiModel: document.getElementById('openAiModel').value,
 								rolePrompt: document.getElementById('rolePrompt').value,
-								wholeFileRolePrompt: document.getElementById('wholeFileRolePrompt').value
+								wholeFileRolePrompt: document.getElementById('wholeFileRolePrompt').value,
+								selectionReplacePrompt: document.getElementById('selectionReplacePrompt').value
 							}
 						});
 
